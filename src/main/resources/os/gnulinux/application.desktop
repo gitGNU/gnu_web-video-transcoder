@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Encoding=UTF-8
+Name=[[name]]
+Exec=[[exec]]
+Icon=[[icon]]
+Terminal=false
+Categories=GNOME;GTK;AudioVideo

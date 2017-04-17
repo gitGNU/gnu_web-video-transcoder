@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright (C) 2016, 2017 Vincent Gravade
+
+This file is part of Web Video Transcoder.
+
+Web Video Transcoder is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either version 3 of
+the License, or (at your option) any later version.
+
+Web Video Transcoder is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with WebVideoTranscoder.
+If not, see <http://www.gnu.org/licenses/>.
+-->
+<project name="webvideotranscoder" default="jar">
+   <property file="build.properties" />
+
+   <condition property="is.windows">
+      <os family="windows" />
+   </condition>
+
+   <target name="clean-build">
+      <delete dir="${build.dir}" />
+   </target>
+
+   <target name="clean-dist">
+      <delete dir="${dist.dir}" />
+   </target>
+
+   <target name="clean" depends="clean-build, clean-dist" />
+
+   <target name="compile" depends="clean-build">
+      <mkdir dir="${build.dir}/classes" />
+      <javac srcdir="${java.src.dir}" destdir="${build.dir}/classes" includeAntRuntime="false" />
+      <copy todir="${build.dir}/classes">
+         <fileset dir="${res.src.dir}" includes="**/*.png" />
+      </copy>
+      <copy todir="${build.dir}/classes" encoding="ISO-8859-1">
+         <fileset dir="${res.src.dir}" includes="**/*.properties" />
+         <filterset begintoken="[[" endtoken="]]">
+            <filter token="name" value="${app.name}" />
+            <filter token="version" value="${project.version}" />
+            <filter token="website" value="${app.website}" />
+         </filterset>
+      </copy>
+   </target>
+
+   <target name="jar" depends="compile">
+      <jar destfile="${build.dir}/jar/${jar.name}" basedir="${build.dir}/classes" includes="**/*">
+         <manifest>
+            <attribute name="Main-Class" value="${project.mainclass}" />
+         </manifest>
+      </jar>
+   </target>
+
+   <target name="run" depends="compile">
+      <java classname="${project.mainclass}" classpath="${build.dir}/classes" fork="true" />
+   </target>
+
+   <target name="init-jdeb">
+      <mkdir dir="${build.dir}/jdeb" />
+      <get src="${jdeb.url}" dest="${build.dir}/jdeb/${jdeb.jar}" />
+   </target>
+
+
+   <target name="dist-icon" depends="clean-dist">
+      <copy file="${app.icon}" tofile="${build.dir}/${project.name}.png" />
+      <copy file="${app.win.icon}" tofile="${build.dir}/win/${project.name}.ico" />
+   </target>
+
+   <target name="dist-deb" depends="jar, init-jdeb, clean-dist, dist-icon">
+      <taskdef name="deb" classname="org.vafer.jdeb.ant.DebAntTask" classpath="${build.dir}/jdeb/${jdeb.jar}" />
+      <copy todir="${build.dir}/deb/control">
+         <fileset dir="${deb.src.dir}/control" />
+         <filterset begintoken="[[" endtoken="]]">
+            <filter token="version" value="${project.version}" />
+            <filter token="description" value="${project.description}" />
+            <filter token="name" value="${project.name}" />
+            <filter token="website" value="${app.website}" />
+         </filterset>
+      </copy>
+      <copy file="${gnulinux.src.dir}/launch.sh" tofile="${build.dir}/gnulinux/${project.name}.sh">
+         <filterset begintoken="[[" endtoken="]]">
+            <filter token="jarpath" value="${gnulinux.install.dir}/${project.name}.jar" />
+         </filterset>
+      </copy>
+      <copy file="${gnulinux.src.dir}/application.desktop" tofile="${build.dir}/gnulinux/${project.name}.desktop">
+         <filterset begintoken="[[" endtoken="]]">
+            <filter token="name" value="${app.name}" />
+            <filter token="description" value="${project.description}" />
+            <filter token="icon" value="${gnulinux.install.dir}/${project.name}.png" />
+            <filter token="exec" value="/usr/bin/${project.name}" />
+         </filterset>
+      </copy>
+      <deb destfile="${dist.dir}/${deb.name}" control="${build.dir}/deb/control" verbose="true">
+         <data src="${build.dir}/jar/${jar.name}" type="file">
+            <mapper type="perm" prefix="${gnulinux.install.dir}" filemode="644" />
+         </data>
+         <data src="${build.dir}/gnulinux/${project.name}.sh" type="file">
+            <mapper type="perm" prefix="${gnulinux.install.dir}" filemode="755" />
+         </data>
+         <data src="${build.dir}/${project.name}.png" type="file">
+            <mapper type="perm" prefix="${gnulinux.install.dir}" filemode="644" />
+         </data>
+         <data src="${build.dir}/gnulinux/${project.name}.desktop" type="file">
+            <mapper type="perm" prefix="${gnulinux.install.dir}" filemode="644" />
+         </data>
+         <link name="${gnulinux.install.dir}/${project.name}.jar" target="${gnulinux.install.dir}/${jar.name}" />
+         <link name="/usr/bin/${project.name}" target="${gnulinux.install.dir}/${project.name}.sh" />
+         <link name="/usr/share/applications/${project.name}.desktop" target="${gnulinux.install.dir}/${project.name}.desktop" />
+      </deb>
+   </target>
+
+   <target name="init-launch4j-win" if="is.windows">
+      <mkdir dir="${build.dir}/launch4j" />
+      <get src="${ant4j.win.url}" dest="${build.dir}/launch4j/launch4j.zip" />
+      <unzip src="${build.dir}/launch4j/launch4j.zip" dest="${build.dir}/launch4j" />
+      <delete file="${build.dir}/launch4j/launch4j.zip" />
+   </target>
+
+   <target name="init-launch4j-gnulinux" unless="is.windows">
+      <mkdir dir="${build.dir}/launch4j" />
+      <get src="${ant4j.gnulinux.url}" dest="${build.dir}/launch4j/launch4j.tar.gz" />
+      <gunzip src="${build.dir}/launch4j/launch4j.tar.gz" />
+      <untar src="${build.dir}/launch4j/launch4j.tar" dest="${build.dir}" />
+      <delete file="${build.dir}/launch4j/launch4j.tar" />
+      <delete file="${build.dir}/launch4j/launch4j.tar.gz" />
+      <chmod file="${build.dir}/launch4j/bin/ld" perm="755" />
+      <chmod file="${build.dir}/launch4j/bin/windres" perm="755" />
+   </target>
+
+   <target name="init-launch4j" depends="init-launch4j-win, init-launch4j-gnulinux" />
+
+   <target name="download-ffmpeg">
+      <mkdir dir="${build.dir}/win/ffmpeg" />
+      <get src="${ffmpeg.url}" dest="${build.dir}/win/ffmpeg/${ffmpeg.file.name}.zip" />
+      <unzip src="${build.dir}/win/ffmpeg/${ffmpeg.file.name}.zip" dest="${build.dir}/win/ffmpeg" />
+      <delete file="${build.dir}/win/ffmpeg/${ffmpeg.file.name}.zip" />
+      <copy todir="${build.dir}/win/ffmpeg">
+         <fileset dir="${build.dir}/win/ffmpeg/${ffmpeg.file.name}/bin" includes="**/*" excludes="**/*ffplay*" />
+      </copy>
+      <delete dir="${build.dir}/win/ffmpeg/${ffmpeg.file.name}" />
+   </target>
+
+   <target name="win-exe" depends="jar, init-launch4j, download-ffmpeg, dist-icon">
+      <taskdef name="launch4j" classname="net.sf.launch4j.ant.Launch4jTask" classpath="${build.dir}/launch4j/launch4j.jar:${build.dir}/launch4j/lib/xstream.jar" />
+      <mkdir dir="${build.dir}/win/exe" />
+      <launch4j>
+         <config headerType="gui" outfile="${build.dir}/win/exe/${project.name}.exe" icon="${build.dir}/win/${project.name}.ico" dontWrapJar="false" jarPath="${build.dir}/jar/${jar.name}">
+            <classPath mainClass="${project.mainclass}" />
+            <jre minVersion="1.5.0" />
+         </config>
+      </launch4j>
+      <copy todir="${build.dir}/win/exe">
+         <fileset dir="${build.dir}/win/ffmpeg" includes="**/*" />
+      </copy>
+      <delete dir="${build.dir}/win/ffmpeg" />
+   </target>
+
+   <target name="win-installer" depends="clean-dist, win-exe">
+      <property name="build.dir.absolute.path" location="${build.dir}"/>
+      <get src="https://www.gnu.org/licenses/gpl-3.0.rtf" dest="${build.dir}/win/COPYING.rtf" />
+      <copy todir="${build.dir}/win">
+         <fileset dir="${win.src.dir}" includes="**/*.nsi" />
+         <filterset begintoken="[[" endtoken="]]">
+            <filter token="version" value="${project.version}" />
+            <filter token="name" value="${project.name}" />
+            <filter token="appname" value="${app.name}" />
+            <filter token="website" value="${app.website}" />
+            <filter token="copyright" value="${app.copyright}" />
+            <filter token="outputpath" value="${build.dir.absolute.path}/win/${win.setup.name}" />
+            <filter token="licensepath" value="${build.dir.absolute.path}/win/COPYING.rtf" />
+         </filterset>
+      </copy>
+      <exec executable="${makensis.path}">
+        <arg value="${build.dir.absolute.path}/win/installer.nsi"/>
+      </exec>
+   </target>
+
+   <target name="dist-win" depends="clean-dist, win-exe, win-installer">
+      <zip destfile="${dist.dir}/${win.portable.name}" basedir="${build.dir}/win/exe" />
+      <copy file="${build.dir}/win/${win.setup.name}" tofile="${dist.dir}/${win.setup.name}" />
+   </target>
+
+   <target name="dist-jar" depends="clean-dist">
+      <copy file="${build.dir}/jar/${jar.name}" tofile="${dist.dir}/${jar.name}" />
+   </target>
+
+   <target name="dist-src" depends="clean-dist">
+      <tar destfile="${dist.dir}/${src.name}" compression="gzip" basedir="../" excludes="build/**, dist/**" />
+   </target>
+
+   <target name="dist-all" depends="dist-deb, dist-win, dist-jar, dist-src" />
+
+   <target name="website" depends="clean-dist">
+      <copy todir="${dist.dir}">
+         <fileset dir="${website.src.dir}" includes="**/*.php" />
+         <filterset begintoken="[[" endtoken="]]">
+            <filter token="version" value="${project.version}" />
+            <filter token="name" value="${project.name}" />
+            <filter token="appname" value="${app.name}" />
+            <filter token="website" value="${app.website}" />
+            <filter token="ffmpegversion" value="${ffmpeg.version}" />
+
+            <filter token="wininstaller" value="${win.setup.name}" />
+            <filter token="winportable" value="${win.portable.name}" />
+            <filter token="deb" value="${deb.name}" />
+            <filter token="jar" value="${jar.name}" />
+            <filter token="src" value="${src.name}" />
+         </filterset>
+      </copy>
+      <copy todir="${dist.dir}">
+         <fileset dir="${website.src.dir}" includes="**/*.png, **/*.htaccess" />
+      </copy>
+   </target>
+
+   <target name="publish" depends="dist-all, website" />
+</project>
+
